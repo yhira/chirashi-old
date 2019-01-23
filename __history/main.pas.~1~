@@ -1,0 +1,247 @@
+unit main;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, IniFileCompo, Menus, StdCtrls, ComCtrls, ToolWin, ImgList,
+  ActnList, DateUtils, NkDropTarget, NkTextDropTarget, XPMan;
+
+type
+	TOptionRec = record
+    Delete: Boolean;
+    DeleteSize: Cardinal;
+    DateTime: Boolean;
+    Separator: string;
+  end;
+
+
+  TFormMain = class(TForm)
+    IniFileCompo1: TIniFileCompo;
+    ToolBar1: TToolBar;
+    ToolButtonNew: TToolButton;
+    ToolButton2: TToolButton;
+    ToolButtonFont: TToolButton;
+    ToolButtonWordWrap: TToolButton;
+    ToolButtonVersion: TToolButton;
+    FontDialog1: TFontDialog;
+    ImageList1: TImageList;
+    ToolButton1: TToolButton;
+    ActionList1: TActionList;
+    ActionNew: TAction;
+    ActionFont: TAction;
+    ActionWordWrap: TAction;
+    ActionVer: TAction;
+    ToolButtonOption: TToolButton;
+    ActionOption: TAction;
+    ActionStayOnTop: TAction;
+    ToolButton3: TToolButton;
+    ToolButton4: TToolButton;
+    XPManifest1: TXPManifest;
+    NkTextDropTarget1: TNkTextDropTarget;
+    Memo1: TRichEdit;
+    procedure FormCreate(Sender: TObject);
+    procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+    procedure ActionFontExecute(Sender: TObject);
+    procedure ActionVerExecute(Sender: TObject);
+    procedure ActionWordWrapExecute(Sender: TObject);
+    procedure ActionNewExecute(Sender: TObject);
+    procedure ActionOptionExecute(Sender: TObject);
+    procedure ActionStayOnTopExecute(Sender: TObject);
+  private
+    { Private 宣言 }
+    Option: TOptionRec;
+    FStayOnTop: Boolean;
+    procedure SaveINI;
+    procedure ReadINI;
+    procedure DeleteMany;
+    procedure SetStayOnTop(const Value: Boolean);
+  public
+    { Public 宣言 }
+    property StayOnTop: Boolean read FStayOnTop write SetStayOnTop;
+  end;
+
+var
+  FormMain: TFormMain;
+
+implementation
+
+{$R *.dfm}
+
+uses option;
+
+const
+  APP_NAME  = 'チラシの裏';
+  APP_VER   = 'Ver1.04';
+  MEMO_TEXT = 'memo.txt';
+  _SEPARATOR = '----------------';
+
+procedure TFormMain.FormCreate(Sender: TObject);
+begin
+  ReadINI;
+
+  if FileExists(MEMO_TEXT) then
+    Memo1.Lines.LoadFromFile(MEMO_TEXT);
+end;
+
+procedure TFormMain.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin                                         
+  SaveINI;
+  DeleteMany;
+  Memo1.Lines.SaveToFile(MEMO_TEXT);
+end;
+
+procedure TFormMain.ReadINI;
+begin
+  with IniFileCompo1 do begin
+    ReadForm('Window', 'Form', FormMain);
+    ReadFont('Option', 'Font', Memo1.Font);
+    //折り返し
+    ActionWordWrap.Checked := ReadBool('Option', 'WordWrap', True);
+    Memo1.WordWrap := ActionWordWrap.Checked;
+    if Memo1.WordWrap then
+      Memo1.ScrollBars  := ssVertical
+    else Memo1.ScrollBars := ssBoth;
+    StayOnTop := ReadBool('Option', 'StayOnTop', False);
+
+    //オプション
+    with Option do begin
+      Delete := ReadBool('Option', 'Del', False);
+      DeleteSize := ReadCardinal('Option', 'DelSize', 32);
+      DateTime := ReadBool('Option', 'Date', True);
+      Separator := ReadStr('Option', 'Separator', _SEPARATOR);
+    end;
+  end;
+
+end;
+
+procedure TFormMain.SaveINI;
+begin
+  with IniFileCompo1 do begin
+    WriteForm('Window', 'Form', FormMain);
+    WriteFont('Option', 'Font', Memo1.Font);
+    //折り返し
+    WriteBool('Option', 'WordWrap', ToolButtonWordWrap.Down); 
+    WriteBool('Option', 'StayOnTop', StayOnTop);
+
+    //オプション
+    with Option do begin
+    	WriteBool('Option', 'Del', Delete);
+      WriteCardinal('Option', 'DelSize', DeleteSize);
+      WriteBool('Option', 'Date', DateTime);
+      WriteStr('Option', 'Separator', Separator);
+    end;
+  end;
+  
+end;
+
+procedure TFormMain.ActionFontExecute(Sender: TObject);
+begin
+  FontDialog1.Font.Assign(Memo1.Font);
+  if FontDialog1.Execute then begin
+    Memo1.Font.Assign(FontDialog1.Font);
+  end;
+end;
+
+procedure TFormMain.ActionVerExecute(Sender: TObject);
+begin
+  MessageDlg(PChar(APP_NAME + ' ' + APP_VER + #13#10 +
+                         'Copyright (C) 2003-' +
+                         IntToStr(YearOf(Now)) + ' by yhira'), mtInformation, [mbOK], 0);
+//  Application.MessageBox(APP_NAME + ' ' + APP_VER + #13#10 +
+//                         'Copyright (C) 2003-2006 by yhira' + #13#10 +
+//                         #13#10 +
+//                         'Mousist Software' + #13#10 +
+//                         'http://mousist.cside.com/',
+//                         'バージョン情報'
+//                         MB_ICONINFORMATION)
+end;
+
+procedure TFormMain.ActionWordWrapExecute(Sender: TObject);
+begin
+	ActionWordWrap.Checked := not ActionWordWrap.Checked;
+  Memo1.Lines.BeginUpdate;
+  Memo1.WordWrap := ActionWordWrap.Checked;
+  Memo1.Lines.EndUpdate;
+//  Memo1.WordWrap := ToolButtonWordWrap.Down;
+  if Memo1.WordWrap then begin
+    Memo1.ScrollBars  := ssVertical;
+  end else begin
+    Memo1.ScrollBars := ssBoth;
+  end;
+end;
+
+procedure TFormMain.ActionNewExecute(Sender: TObject);
+	function AddSeparator: string;
+  var
+  	sDateTime: string;
+  begin
+    if Option.DateTime then begin
+      sDateTime := FormatDateTime('yyyy/mm/dd hh:nn', Now) + #13#10;
+    end else begin
+      sDateTime := '';
+    end;
+    Result := #13#10 + #13#10 +
+              sDateTime +
+              Option.Separator + #13#10;
+  end;
+begin
+  Memo1.Text := AddSeparator + Memo1.Text;
+  Memo1.SetFocus;
+end;
+
+procedure TFormMain.ActionOptionExecute(Sender: TObject);
+begin
+	FormOption := TFormOption.Create(Self);
+  try
+  	with Option, FormOption do begin
+      CheckBoxDelete.Checked   := Delete;
+      SpinEditDeleatSize.Value := DeleteSize;
+      CheckBoxDateTime.Checked := DateTime;
+      EditSeparator.Text       := Separator;
+
+//      SpinEditDeleatSize.Enabled := Delete;
+
+    end;
+    if FormOption.ShowModal = mrOK then begin
+      with Option, FormOption do begin
+        Delete     := CheckBoxDelete.Checked;
+        DeleteSize := SpinEditDeleatSize.Value;
+        DateTime   := CheckBoxDateTime.Checked;
+        Separator  := EditSeparator.Text;
+      end;
+    end;
+  finally
+  	FormOption.Release;
+  end;
+end;
+
+procedure TFormMain.DeleteMany;
+var
+	DelSise: Cardinal;
+begin
+	DelSise := Option.DeleteSize * 1024;
+	if Option.Delete then begin
+    Memo1.Text := Copy(Memo1.Text, 1, DelSise);
+  end;
+end;
+
+procedure TFormMain.ActionStayOnTopExecute(Sender: TObject);
+begin
+  StayOnTop := not StayOnTop;
+end;
+
+procedure TFormMain.SetStayOnTop(const Value: Boolean);
+begin
+  FStayOnTop := Value;
+  ActionStayOnTop.Checked := Value;
+  If Value Then  begin
+    //表示
+    SetWindowPos(Handle, HWND_TOPMOST,0,0,0,0,SWP_NOSIZE or SWP_NOMOVE);
+  end else begin
+    //解除
+    SetWindowPos(Handle, HWND_NOTOPMOST,0,0,0,0,SWP_NOSIZE or SWP_NOMOVE);
+  End;
+end;
+
+end.
